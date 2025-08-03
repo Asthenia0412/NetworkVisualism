@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tahoe 拥塞控制算法模拟器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            color: #2c3e50;
+        }
+        .container {
+            display: flex;
+            gap: 20px;
+        }
+        .controls {
+            flex: 1;
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .visualization {
+            flex: 2;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .value-display {
+            font-size: 0.9em;
+            color: #666;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        canvas {
+            width: 100%;
+            border: 1px solid #ddd;
+            background-color: #f5f5f5;
+        }
+        .concept {
+            margin-top: 30px;
+            background-color: #f0f8ff;
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .concept h2 {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tahoe 拥塞控制算法模拟器</h1>
+    
+    <div class="container">
+        <div class="controls">
+            <h2>参数调整</h2>
+            
+            <div class="form-group">
+                <label for="initialWindow">初始窗口大小 (MSS)</label>
+                <input type="range" id="initialWindow" min="1" max="10" value="1" step="1">
+                <div class="value-display">当前值: <span id="initialWindowValue">1</span> MSS</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="threshold">初始阈值 (MSS)</label>
+                <input type="range" id="threshold" min="1" max="20" value="8" step="1">
+                <div class="value-display">当前值: <span id="thresholdValue">8</span> MSS</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="rtt">往返时间 (RTT, ms)</label>
+                <input type="range" id="rtt" min="50" max="500" value="200" step="10">
+                <div class="value-display">当前值: <span id="rttValue">200</span> ms</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="lossRate">丢包率 (%)</label>
+                <input type="range" id="lossRate" min="0" max="20" value="5" step="1">
+                <div class="value-display">当前值: <span id="lossRateValue">5</span>%</div>
+            </div>
+            
+            <div class="form-group">
+                <label for="simulationTime">模拟时间 (RTT)</label>
+                <input type="range" id="simulationTime" min="10" max="50" value="20" step="1">
+                <div class="value-display">当前值: <span id="simulationTimeValue">20</span> RTT</div>
+            </div>
+            
+            <button id="startSimulation">开始模拟</button>
+            <button id="resetSimulation">重置模拟</button>
+        </div>
+        
+        <div class="visualization">
+            <h2>拥塞窗口变化</h2>
+            <canvas id="congestionGraph" height="400"></canvas>
+        </div>
+    </div>
+    
+    <div class="concept">
+        <h2>拥塞控制概念</h2>
+        <p>拥塞控制是TCP协议中的一种机制，用于防止网络因过多的数据包而变得拥塞。当网络中的路由器或链路因流量过大而无法处理时，就会发生拥塞，导致数据包丢失或延迟增加。</p>
+        
+        <h3>Tahoe算法原理</h3>
+        <p>Tahoe是TCP最早的拥塞控制算法之一，包含以下主要阶段：</p>
+        <ol>
+            <li><strong>慢启动(Slow Start)</strong>：窗口大小从1个MSS开始，每收到一个ACK就增加1个MSS，呈指数增长。</li>
+            <li><strong>拥塞避免(Congestion Avoidance)</strong>：当窗口达到阈值(ssthresh)时，转为线性增长，每RTT增加1个MSS。</li>
+            <li><strong>快速重传(Fast Retransmit)</strong>：当收到3个重复ACK时，立即重传丢失的包。</li>
+            <li><strong>快速恢复(Fast Recovery)</strong>：Tahoe会直接将窗口降为1并重新开始慢启动。</li>
+        </ol>
+        
+        <h3>Tahoe特点</h3>
+        <ul>
+            <li>保守的拥塞响应：检测到拥塞后窗口直接重置为1</li>
+            <li>没有区分丢包类型（超时或重复ACK）</li>
+            <li>后续的Reno算法对此进行了改进</li>
+        </ul>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const initialWindowSlider = document.getElementById('initialWindow');
+        const thresholdSlider = document.getElementById('threshold');
+        const rttSlider = document.getElementById('rtt');
+        const lossRateSlider = document.getElementById('lossRate');
+        const simulationTimeSlider = document.getElementById('simulationTime');
+        
+        const initialWindowValue = document.getElementById('initialWindowValue');
+        const thresholdValue = document.getElementById('thresholdValue');
+        const rttValue = document.getElementById('rttValue');
+        const lossRateValue = document.getElementById('lossRateValue');
+        const simulationTimeValue = document.getElementById('simulationTimeValue');
+        
+        const startBtn = document.getElementById('startSimulation');
+        const resetBtn = document.getElementById('resetSimulation');
+        const canvas = document.getElementById('congestionGraph');
+        const ctx = canvas.getContext('2d');
+        
+        // 设置canvas的实际尺寸
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width * window.devicePixelRatio;
+            canvas.height = rect.height * window.devicePixelRatio;
+            ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+        }
+        
+        // 初始化时调整canvas尺寸
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+        
+        // 更新显示的值
+        function updateDisplayValues() {
+            initialWindowValue.textContent = initialWindowSlider.value;
+            thresholdValue.textContent = thresholdSlider.value;
+            rttValue.textContent = rttSlider.value;
+            lossRateValue.textContent = lossRateSlider.value;
+            simulationTimeValue.textContent = simulationTimeSlider.value;
+        }
+        
+        // 监听滑块变化
+        initialWindowSlider.addEventListener('input', updateDisplayValues);
+        thresholdSlider.addEventListener('input', updateDisplayValues);
+        rttSlider.addEventListener('input', updateDisplayValues);
+        lossRateSlider.addEventListener('input', updateDisplayValues);
+        simulationTimeSlider.addEventListener('input', updateDisplayValues);
+        
+        // 初始化显示值
+        updateDisplayValues();
+        
+        // 模拟Tahoe算法
+        function simulateTahoe() {
+            const initialWindow = parseInt(initialWindowSlider.value);
+            const threshold = parseInt(thresholdSlider.value);
+            const rtt = parseInt(rttSlider.value);
+            const lossRate = parseInt(lossRateSlider.value) / 100;
+            const simulationTime = parseInt(simulationTimeSlider.value);
+            
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 设置绘图样式
+            ctx.strokeStyle = '#3498db';
+            ctx.lineWidth = 2;
+            ctx.fillStyle = '#3498db';
+            ctx.font = '12px Arial';
+            
+            // 计算绘图比例
+            const width = canvas.width / window.devicePixelRatio;
+            const height = canvas.height / window.devicePixelRatio;
+            const xStep = width / simulationTime;
+            const yScale = (height - 40) / (threshold * 2); // 留出空间显示阈值线
+            
+            // 绘制坐标轴
+            ctx.beginPath();
+            ctx.moveTo(30, height - 30);
+            ctx.lineTo(width - 10, height - 30);
+            ctx.moveTo(30, height - 30);
+            ctx.lineTo(30, 20);
+            ctx.stroke();
+            
+            // 绘制刻度
+            for (let i = 0; i <= simulationTime; i += 5) {
+                const x = 30 + i * xStep;
+                ctx.fillText(i, x - 5, height - 15);
+                ctx.beginPath();
+                ctx.moveTo(x, height - 30);
+                ctx.lineTo(x, height - 25);
+                ctx.stroke();
+            }
+            
+            for (let i = 0; i <= threshold * 2; i += 2) {
+                const y = height - 30 - i * yScale;
+                ctx.fillText(i, 10, y + 5);
+                ctx.beginPath();
+                ctx.moveTo(30, y);
+                ctx.lineTo(25, y);
+                ctx.stroke();
+            }
+            
+            // 绘制阈值线
+            ctx.strokeStyle = '#e74c3c';
+            ctx.setLineDash([5, 3]);
+            ctx.beginPath();
+            const thresholdY = height - 30 - threshold * yScale;
+            ctx.moveTo(30, thresholdY);
+            ctx.lineTo(width - 10, thresholdY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillText(`阈值: ${threshold} MSS`, width - 100, thresholdY - 5);
+            
+            // 重置线条样式
+            ctx.strokeStyle = '#3498db';
+            
+            // 模拟算法
+            let cwnd = initialWindow;
+            let ssthresh = threshold;
+            let time = 0;
+            let inSlowStart = true;
+            let lastLossTime = -10;
+            
+            const dataPoints = [];
+            
+            while (time <= simulationTime) {
+                // 记录当前窗口大小
+                dataPoints.push({ time, cwnd, event: null });
+                
+                // 检查是否发生丢包
+                if (Math.random() < lossRate && time - lastLossTime > 1) {
+                    // Tahoe对任何丢包都重置窗口
+                    ssthresh = Math.max(1, Math.floor(cwnd / 2));
+                    cwnd = 1;
+                    inSlowStart = true;
+                    lastLossTime = time;
+                    
+                    // 记录丢包事件
+                    dataPoints.push({ time, cwnd, event: 'loss' });
+                }
+                
+                // 更新窗口大小
+                if (inSlowStart) {
+                    cwnd += 1; // 慢启动阶段指数增长
+                    if (cwnd >= ssthresh) {
+                        inSlowStart = false;
+                    }
+                } else {
+                    cwnd += 1 / cwnd; // 拥塞避免阶段线性增长
+                }
+                
+                time += 1;
+            }
+            
+            // 绘制曲线
+            ctx.beginPath();
+            ctx.moveTo(30, height - 30 - dataPoints[0].cwnd * yScale);
+            
+            for (let i = 1; i < dataPoints.length; i++) {
+                const point = dataPoints[i];
+                const x = 30 + point.time * xStep;
+                const y = height - 30 - point.cwnd * yScale;
+                
+                ctx.lineTo(x, y);
+                
+                // 标记丢包事件
+                if (point.event === 'loss') {
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(x, y);
+                    
+                    // 绘制红色标记
+                    ctx.fillStyle = '#e74c3c';
+                    ctx.beginPath();
+                    ctx.arc(x, y, 4, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.fillStyle = '#3498db';
+                }
+            }
+            
+            ctx.stroke();
+            
+            // 添加图例
+            ctx.fillStyle = '#3498db';
+            ctx.fillText('拥塞窗口', width - 100, 20);
+            
+            ctx.fillStyle = '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(width - 110, 16, 4, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillText('丢包事件', width - 100, 20);
+        }
+        
+        // 开始模拟
+        startBtn.addEventListener('click', simulateTahoe);
+        
+        // 重置模拟
+        resetBtn.addEventListener('click', function() {
+            initialWindowSlider.value = 1;
+            thresholdSlider.value = 8;
+            rttSlider.value = 200;
+            lossRateSlider.value = 5;
+            simulationTimeSlider.value = 20;
+            updateDisplayValues();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        });
+        
+        // 初始绘制
+        simulateTahoe();
+    </script>
+</body>
+</html>
