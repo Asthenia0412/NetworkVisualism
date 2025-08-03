@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TCP 三次握手交互式模拟器（含异常场景）</title>
+    <title>TCP 四次挥手交互式模拟器</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -71,15 +71,6 @@
             border-radius: 4px;
             background-color: #e8f4fc;
         }
-        .connection-line {
-            position: absolute;
-            height: 2px;
-            background-color: #95a5a6;
-            left: 200px;
-            right: 200px;
-            top: 120px;
-            opacity: 0.3;
-        }
         .packet {
             position: absolute;
             width: 80px;
@@ -94,14 +85,14 @@
             transition: all 1.5s ease;
             z-index: 10;
         }
-        .packet.syn {
-            background-color: #1976d2;
-        }
-        .packet.syn-ack {
-            background-color: #388e3c;
+        .packet.fin {
+            background-color: #d32f2f;
         }
         .packet.ack {
             background-color: #ffa000;
+        }
+        .packet.fin-ack {
+            background-color: #388e3c;
         }
         .packet.lost {
             background-color: #e53935;
@@ -131,7 +122,7 @@
         .drawing-line {
             position: absolute;
             height: 2px;
-            background-color: #3498db;
+            background-color: #95a5a6;
             transform-origin: left center;
             transform: scaleX(0);
             transition: transform 1.5s ease;
@@ -140,14 +131,14 @@
         .drawing-line.active {
             transform: scaleX(1);
         }
-        .drawing-line.syn {
-            background-color: #1976d2;
-        }
-        .drawing-line.syn-ack {
-            background-color: #388e3c;
+        .drawing-line.fin {
+            background-color: #d32f2f;
         }
         .drawing-line.ack {
             background-color: #ffa000;
+        }
+        .drawing-line.fin-ack {
+            background-color: #388e3c;
         }
         .drawing-line.lost {
             background-color: #e53935;
@@ -284,11 +275,17 @@
             font-weight: bold;
             margin-top: 10px;
         }
+        .interview-question {
+            background-color: #e3f2fd;
+            padding: 10px;
+            border-left: 4px solid #1976d2;
+            margin-bottom: 15px;
+        }
     </style>
 </head>
 <body>
-    <h1>TCP 三次握手交互式模拟器（含异常场景）</h1>
-    <p>通过这个交互式工具，直观理解TCP三次握手的过程，包括正常流程和常见异常情况。</p>
+    <h1>TCP 四次挥手交互式模拟器</h1>
+    <p>通过这个交互式工具，直观理解TCP四次挥手的过程，包括正常流程和常见异常情况。</p>
     
     <div class="container">
         <div class="control-panel">
@@ -297,29 +294,29 @@
             <div class="param-group">
                 <h3>模拟参数</h3>
                 
-                <label for="clientISN">
-                    客户端初始序列号 (ISN)
+                <label for="clientLastSeq">
+                    客户端最后序列号
                     <span class="tooltip">?
-                        <span class="tooltiptext">TCP连接中客户端选择的随机初始序列号</span>
+                        <span class="tooltiptext">客户端在连接关闭前的最后一个数据包序列号</span>
                     </span>
                 </label>
-                <input type="range" id="clientISN" min="1000" max="50000" value="12345" step="1">
+                <input type="range" id="clientLastSeq" min="1000" max="50000" value="23456" step="1">
                 <div class="value-display">
                     <span>1000</span>
-                    <span id="clientISNValue">12345</span>
+                    <span id="clientLastSeqValue">23456</span>
                     <span>50000</span>
                 </div>
                 
-                <label for="serverISN">
-                    服务端初始序列号 (ISN)
+                <label for="serverLastSeq">
+                    服务端最后序列号
                     <span class="tooltip">?
-                        <span class="tooltiptext">TCP连接中服务端选择的随机初始序列号</span>
+                        <span class="tooltiptext">服务端在连接关闭前的最后一个数据包序列号</span>
                     </span>
                 </label>
-                <input type="range" id="serverISN" min="1000" max="50000" value="54321" step="1">
+                <input type="range" id="serverLastSeq" min="1000" max="50000" value="34567" step="1">
                 <div class="value-display">
                     <span>1000</span>
-                    <span id="serverISNValue">54321</span>
+                    <span id="serverLastSeqValue">34567</span>
                     <span>50000</span>
                 </div>
             </div>
@@ -330,18 +327,19 @@
                 <label for="abnormalScenario">
                     选择异常场景
                     <span class="tooltip">?
-                        <span class="tooltiptext">选择要模拟的异常握手场景</span>
+                        <span class="tooltiptext">选择要模拟的异常挥手场景</span>
                     </span>
                 </label>
                 <select id="abnormalScenario">
-                    <option value="none">正常三次握手</option>
-                    <option value="twoWay">两次握手弊端</option>
-                    <option value="lostSynAck">SYN-ACK丢失</option>
-                    <option value="lostAck">ACK丢失</option>
+                    <option value="none">正常四次挥手</option>
+                    <option value="threeWay">三次挥手</option>
+                    <option value="lostFinAck">FIN-ACK丢失</option>
+                    <option value="lostLastAck">最后ACK丢失</option>
+                    <option value="timeWait">TIME_WAIT状态</option>
                 </select>
                 
                 <div class="param-description">
-                    注意：异常场景模拟将展示TCP协议设计中的关键考虑。
+                    注意：异常场景模拟将展示TCP协议关闭连接时的关键考虑。
                 </div>
             </div>
             
@@ -356,26 +354,25 @@
         </div>
         
         <div class="visualization">
-            <h2>TCP握手过程可视化</h2>
+            <h2>TCP挥手过程可视化</h2>
             
             <div class="handshake-diagram" id="handshakeDiagram">
                 <div class="connection-line"></div>
                 <div class="client-box">
                     <strong>客户端</strong>
-                    <div class="status-indicator" id="clientStatus">状态: CLOSED</div>
+                    <div class="status-indicator" id="clientStatus">状态: ESTABLISHED</div>
                     <div id="clientSeq">序列号: -</div>
                     <div id="clientAck">确认号: -</div>
                 </div>
                 <div class="server-box">
                     <strong>服务端</strong>
-                    <div class="status-indicator" id="serverStatus">状态: CLOSED</div>
+                    <div class="status-indicator" id="serverStatus">状态: ESTABLISHED</div>
                     <div id="serverSeq">序列号: -</div>
                     <div id="serverAck">确认号: -</div>
                 </div>
-                <!-- 动态添加的绘制线条和数据包 -->
             </div>
             
-            <h3>握手过程详情</h3>
+            <h3>挥手过程详情</h3>
             <table class="data-table">
                 <thead>
                     <tr>
@@ -392,138 +389,138 @@
                     <!-- 数据将通过JavaScript动态填充 -->
                 </tbody>
             </table>
+            
+            <div class="interview-question">
+                <h3>面试问题：为什么需要四次挥手？</h3>
+                <p>TCP是全双工协议，每个方向都需要单独关闭。四次挥手确保：</p>
+                <ol>
+                    <li>客户端发送FIN通知服务端要关闭连接</li>
+                    <li>服务端回应ACK确认收到关闭请求</li>
+                    <li>服务端发送FIN通知客户端要关闭连接</li>
+                    <li>客户端回应ACK确认收到关闭请求</li>
+                </ol>
+            </div>
         </div>
     </div>
     
     <div class="concept-section">
-        <h2>TCP握手异常场景解析</h2>
-          <!-- 新增的标准三次握手流程卡片 -->
+        <h2>TCP挥手流程解析</h2>
+        
         <div class="concept-card">
-            <h3>标准三次握手流程（修正版）</h3>
+            <h3>标准四次挥手流程</h3>
             <p><strong>初始状态</strong></p>
             <ul>
-                <li>客户端状态：CLOSED</li>
+                <li>客户端状态：ESTABLISHED</li>
+                <li>服务端状态：ESTABLISHED</li>
+                <li><em>双方已完成数据传输，准备关闭连接</em></li>
+            </ul>
+
+            <p><strong>第一步：客户端发送FIN</strong></p>
+            <ul>
+                <li>客户端状态：ESTABLISHED → FIN_WAIT_1</li>
+                <li>服务端状态：ESTABLISHED（保持不变）</li>
+                <li>数据包：FIN（seq=u）</li>
+                <li><em>客户端主动关闭连接，进入FIN_WAIT_1状态</em></li>
+            </ul>
+
+            <p><strong>第二步：服务端回应ACK</strong></p>
+            <ul>
+                <li>服务端状态：ESTABLISHED → CLOSE_WAIT</li>
+                <li>客户端状态：FIN_WAIT_1 → FIN_WAIT_2</li>
+                <li>数据包：ACK（ack=u+1）</li>
+                <li><em>服务端确认收到FIN，进入CLOSE_WAIT状态</em></li>
+                <li><em>客户端收到ACK后进入FIN_WAIT_2状态</em></li>
+            </ul>
+
+            <p><strong>第三步：服务端发送FIN</strong></p>
+            <ul>
+                <li>服务端状态：CLOSE_WAIT → LAST_ACK</li>
+                <li>客户端状态：FIN_WAIT_2（保持不变）</li>
+                <li>数据包：FIN（seq=v, ack=u+1）</li>
+                <li><em>服务端完成数据发送后发送FIN，进入LAST_ACK状态</em></li>
+            </ul>
+
+            <p><strong>第四步：客户端发送ACK</strong></p>
+            <ul>
+                <li>客户端状态：FIN_WAIT_2 → TIME_WAIT</li>
+                <li>服务端状态：LAST_ACK → CLOSED</li>
+                <li>数据包：ACK（ack=v+1）</li>
+                <li><em>客户端确认收到FIN，进入TIME_WAIT状态</em></li>
+                <li><em>服务端收到ACK后关闭连接</em></li>
+            </ul>
+
+            <p><strong>最终状态</strong></p>
+            <ul>
+                <li>客户端状态：TIME_WAIT → CLOSED（2MSL超时后）</li>
                 <li>服务端状态：CLOSED</li>
-                <li><em>服务端必须先调用listen()进入监听状态</em></li>
-            </ul>
-
-            <p><strong>第一步：客户端发送SYN</strong></p>
-            <ul>
-                <li>客户端状态：CLOSED → SYN_SENT</li>
-                <li>服务端状态：LISTEN（保持不变）</li>
-                <li>数据包：SYN（seq=x）</li>
-            </ul>
-
-            <p><strong>第二步：服务端回应SYN-ACK</strong></p>
-            <ul>
-                <li>服务端状态：LISTEN → SYN_RECEIVED</li>
-                <li>客户端状态：SYN_SENT（保持不变）</li>
-                <li>数据包：SYN-ACK（seq=y, ack=x+1）</li>
-            </ul>
-
-            <p><strong>第三步：客户端发送ACK</strong></p>
-            <ul>
-                <li>客户端状态：SYN_SENT → ESTABLISHED</li>
-                <li>服务端状态：SYN_RECEIVED → ESTABLISHED</li>
-                <li>数据包：ACK（ack=y+1）</li>
-            </ul>
-
-            <p><strong>关键修正点：</strong></p>
-            <p><strong>服务端初始状态</strong></p>
-            <ul>
-                <li>服务端必须先调用bind()和listen()进入LISTEN状态</li>
-                <li>不能直接从CLOSED跳到SYN_RECEIVED</li>
-            </ul>
-
-            <p><strong>状态变化时机</strong></p>
-            <ul>
-                <li>服务端是在<strong>发送</strong>SYN-ACK后变为SYN_RECEIVED，不是在收到SYN时</li>
-                <li>客户端是在<strong>发送</strong>ACK后变为ESTABLISHED，不是在收到SYN-ACK时</li>
-            </ul>
-
-            <p><strong>序列号规则</strong></p>
-            <ul>
-                <li>第一个ACK号是对方序列号+1（ack=x+1）</li>
-                <li>第二个ACK号是对方序列号+1（ack=y+1）</li>
-            </ul>
-        </div>
-        <div class="concept-card">
-    <h3>两次握手弊端</h3>
-    <p>如果只有两次握手（客户端SYN → 服务端SYN-ACK）：</p>
-    <ul>
-        <li><strong>服务端无法确认客户端是否收到SYN-ACK</strong>：客户端可能没有收到SYN-ACK，但服务端已经认为连接建立</li>
-        <li><strong>资源浪费</strong>：服务端会为半连接分配资源，容易遭受资源耗尽攻击</li>
-        <li><strong>历史连接问题</strong>：
-            <ol type="I">
-                <li><u>场景还原</u>：
-                    <div style="font-family: monospace; margin: 5px 0 0 15px;">
-                        T0: 客户端发送 SYN(seq=100) → 网络延迟滞留<br>
-                        T1: 客户端超时重发 SYN(seq=200) → 正常建立连接<br>
-                        T2: 服务端收到延迟的 SYN(seq=100)
-                    </div>
-                </li>
-                <li><u>协议冲突</u>：
-                    <ul style="list-style-type: square;">
-                        <li>服务端将延迟SYN误认为新连接请求</li>
-                        <li>客户端已使用新序列号空间(seq=200+)</li>
-                        <li>旧序列号(seq=100)的上下文已被销毁</li>
-                    </ul>
-                </li>
-                <li><u>最终结果</u>：
-                    <table border="1" style="margin: 5px 0; border-collapse: collapse;">
-                        <tr>
-                            <th style="padding: 3px;">客户端行为</th>
-                            <th style="padding: 3px;">服务端状态</th>
-                        </tr>
-                        <tr>
-                            <td style="padding: 3px;">发送RST或丢弃</td>
-                            <td style="padding: 3px;">维持半连接直到超时</td>
-                        </tr>
-                    </table>
-                </li>
-            </ol>
-        </li>
-        <li><strong>客户端对延迟SYN-ACK的处理</strong>：
-            <ul>
-                <li>若客户端已建立新连接 → 发送RST重置包</li>
-                <li>若客户端已关闭连接 → 静默丢弃该SYN-ACK</li>
-                <li>服务端仍需等待超时（默认31秒）才会释放资源</li>
-            </ul>
-        </li>
-    </ul>
-</div>
-        
-        <div class="concept-card">
-            <h3>SYN-ACK丢失</h3>
-            <p>当服务端的SYN-ACK包丢失时：</p>
-            <ul>
-                <li>客户端会等待ACK超时（默认约3秒）</li>
-                <li>客户端会重传SYN包（默认重试5次）</li>
-                <li>服务端在收到重传的SYN后会再次发送SYN-ACK</li>
-                <li>如果始终无法收到SYN-ACK，客户端最终会放弃连接</li>
+                <li><em>连接完全关闭</em></li>
             </ul>
         </div>
         
         <div class="concept-card">
-            <h3>ACK丢失</h3>
-            <p>当客户端的ACK包丢失时：</p>
+            <h3>三次挥手场景</h3>
+            <p>当服务端的FIN和ACK合并发送时：</p>
+            <ul>
+                <li>客户端发送FIN → 服务端发送FIN-ACK → 客户端发送ACK</li>
+                <li>减少了数据包数量，但可能导致客户端过早释放资源</li>
+                <li>当服务端​​没有待发送数据​​且​​立即响应关闭请求​​时，可能将ACK和FIN合并发送：</li>
+                <li>实际实现中，服务端可能延迟发送FIN，等待数据处理完成</li>
+            </ul>
+        </div>
+        
+        <div class="concept-card">
+            <h3>FIN-ACK丢失</h3>
+            <p>当服务端的FIN-ACK包丢失时：</p>
+            <ul>
+                <li>客户端会等待FIN-ACK超时（默认约60秒）</li>
+                <li>客户端会重传FIN包（默认重试5次）</li>
+                <li>服务端在收到重传的FIN后会再次发送FIN-ACK</li>
+                <li>如果始终无法收到FIN-ACK，客户端最终会强制关闭连接</li>
+            </ul>
+        </div>
+        
+        <div class="concept-card">
+            <h3>最后ACK丢失</h3>
+            <p>当客户端的最后一个ACK包丢失时：</p>
             <ul>
                 <li>服务端会等待ACK超时（默认约1分钟）</li>
-                <li>服务端会重传SYN-ACK包（默认重试5次）</li>
-                <li>客户端已经建立连接，但服务端会关闭连接</li>
-                <li>应用程序需要处理这种状态不一致的情况</li>
+                <li>服务端会重传FIN包（默认重试5次）</li>
+                <li>客户端已经关闭连接，但服务端会保持LAST_ACK状态</li>
+                <li>最终服务端会超时关闭连接</li>
             </ul>
+        </div>
+        
+        <div class="concept-card">
+            <h3>TIME_WAIT状态</h3>
+            <p>主动关闭方会进入TIME_WAIT状态（2MSL时间）：</p>
+            <ul>
+                <li>确保最后一个ACK能到达对端</li>
+                <li>让网络中旧的重复包失效</li>
+                <li>MSL(Maximum Segment Lifetime)通常为30秒-2分钟</li>
+                <li>面试常见问题：为什么TIME_WAIT是2MSL而不是1MSL？</li>
+            </ul>
+        </div>
+        
+        <div class="interview-question">
+            <h3>面试问题：CLOSE_WAIT状态过多怎么办？</h3>
+            <p>CLOSE_WAIT状态表示服务端已经收到FIN但未发送自己的FIN，常见原因：</p>
+            <ol>
+                <li>应用程序没有正确关闭socket</li>
+                <li>服务端处理请求时间过长</li>
+                <li>资源泄漏导致无法释放连接</li>
+            </ol>
+            <p>解决方案：检查应用程序的socket关闭逻辑，增加资源监控。</p>
         </div>
     </div>
 
     <script>
         // 获取DOM元素
-        const clientISNSlider = document.getElementById('clientISN');
-        const serverISNSlider = document.getElementById('serverISN');
+        const clientLastSeqSlider = document.getElementById('clientLastSeq');
+        const serverLastSeqSlider = document.getElementById('serverLastSeq');
         const abnormalScenarioSelect = document.getElementById('abnormalScenario');
         
-        const clientISNValue = document.getElementById('clientISNValue');
-        const serverISNValue = document.getElementById('serverISNValue');
+        const clientLastSeqValue = document.getElementById('clientLastSeqValue');
+        const serverLastSeqValue = document.getElementById('serverLastSeqValue');
         
         const startBtn = document.getElementById('startSimulation');
         const stepBtn = document.getElementById('stepSimulation');
@@ -544,10 +541,10 @@
         // 模拟状态
         let simulationState = {
             step: 0,
-            clientState: 'CLOSED',
-            serverState: 'CLOSED',
-            clientISN: 12345,
-            serverISN: 54321,
+            clientState: 'ESTABLISHED',
+            serverState: 'ESTABLISHED',
+            clientLastSeq: 23456,
+            serverLastSeq: 34567,
             clientSeqNum: 0,
             serverSeqNum: 0,
             clientAckNum: 0,
@@ -561,18 +558,18 @@
         
         // 更新显示的值
         function updateDisplayValues() {
-            clientISNValue.textContent = clientISNSlider.value;
-            serverISNValue.textContent = serverISNSlider.value;
+            clientLastSeqValue.textContent = clientLastSeqSlider.value;
+            serverLastSeqValue.textContent = serverLastSeqSlider.value;
         }
         
         // 监听滑块变化
-        clientISNSlider.addEventListener('input', updateDisplayValues);
-        serverISNSlider.addEventListener('input', updateDisplayValues);
+        clientLastSeqSlider.addEventListener('input', updateDisplayValues);
+        serverLastSeqSlider.addEventListener('input', updateDisplayValues);
         
         // 初始化显示值
         updateDisplayValues();
         
-        // 绘制握手过程
+        // 绘制挥手过程
         function drawHandshake() {
             // 清空图表
             const existingPackets = document.querySelectorAll('.packet');
@@ -617,10 +614,10 @@
                 
                 if (packet.direction === 'client-to-server') {
                     line.style.left = `${clientCenter.x}px`;
-                    line.style.backgroundColor = '#1976d2';
+                    line.style.backgroundColor = '#d32f2f';
                 } else {
                     line.style.left = `${serverCenter.x - lineLength}px`;
-                    line.style.backgroundColor = '#388e3c';
+                    line.style.backgroundColor = packet.type === 'ack' ? '#ffa000' : '#388e3c';
                 }
                 
                 if (packet.isLost) {
@@ -674,7 +671,7 @@
             updateHandshakeTable();
         }
         
-        // 更新握手表格（修复版）
+        // 更新握手表格
         function updateHandshakeTable() {
             handshakeTableBody.innerHTML = '';
             errorMessage.textContent = '';
@@ -684,43 +681,53 @@
             const baseSteps = [
                 {
                     step: 1,
-                    packet: 'SYN',
+                    packet: 'FIN',
                     direction: '客户端 → 服务端',
-                    seq: simulationState.clientISN,
+                    seq: simulationState.clientLastSeq + 1,
                     ack: 0,
-                    clientState: 'SYN_SENT',
-                    serverState: 'LISTEN',
-                    description: '客户端发送SYN包，包含初始序列号(ISN)'
+                    clientState: 'FIN_WAIT_1',
+                    serverState: 'ESTABLISHED',
+                    description: '客户端发送FIN包，请求关闭连接'
                 },
                 {
                     step: 2,
-                    packet: 'SYN-ACK',
+                    packet: 'ACK',
                     direction: '服务端 → 客户端',
-                    seq: simulationState.serverISN,
-                    ack: simulationState.clientISN + 1,
-                    clientState: 'SYN_SENT',
-                    serverState: 'SYN_RECEIVED',
-                    description: '服务端回应SYN-ACK包，包含自己的ISN和对客户端ISN的确认'
+                    seq: simulationState.serverLastSeq,
+                    ack: simulationState.clientLastSeq + 2,
+                    clientState: 'FIN_WAIT_2',
+                    serverState: 'CLOSE_WAIT',
+                    description: '服务端回应ACK确认客户端的FIN'
                 },
                 {
                     step: 3,
-                    packet: 'ACK',
-                    direction: '客户端 → 服务端',
-                    seq: simulationState.clientISN + 1,
-                    ack: simulationState.serverISN + 1,
-                    clientState: 'ESTABLISHED',
-                    serverState: 'SYN_RECEIVED',
-                    description: '客户端发送ACK包确认服务端的ISN'
+                    packet: 'FIN',
+                    direction: '服务端 → 客户端',
+                    seq: simulationState.serverLastSeq + 1,
+                    ack: simulationState.clientLastSeq + 2,
+                    clientState: 'FIN_WAIT_2',
+                    serverState: 'LAST_ACK',
+                    description: '服务端发送FIN包，请求关闭连接'
                 },
                 {
                     step: 4,
+                    packet: 'ACK',
+                    direction: '客户端 → 服务端',
+                    seq: simulationState.clientLastSeq + 2,
+                    ack: simulationState.serverLastSeq + 2,
+                    clientState: 'TIME_WAIT',
+                    serverState: 'CLOSED',
+                    description: '客户端回应ACK确认服务端的FIN'
+                },
+                {
+                    step: 5,
                     packet: '-',
                     direction: '-',
                     seq: '-',
                     ack: '-',
-                    clientState: 'ESTABLISHED',
-                    serverState: 'ESTABLISHED',
-                    description: '连接建立完成，双方可以开始数据传输'
+                    clientState: 'CLOSED',
+                    serverState: 'CLOSED',
+                    description: '连接完全关闭'
                 }
             ];
 
@@ -729,63 +736,71 @@
             const currentStep = simulationState.step;
             const scenario = simulationState.abnormalScenario;
 
-            // 正常三次握手流程
+            // 正常四次挥手流程
             if (scenario === 'none') {
                 showSteps = baseSteps.slice(0, currentStep + 1);
             } 
-            // 两次握手弊端
-            else if (scenario === 'twoWay') {
+            // 三次挥手场景
+            else if (scenario === 'threeWay') {
                 if (currentStep >= 1) {
                     showSteps.push(baseSteps[0]);
                 }
                 if (currentStep >= 2) {
                     showSteps.push({
                         ...baseSteps[1],
-                        description: '服务端回应SYN-ACK后，没有收到客户端的ACK确认'
+                        packet: 'FIN-ACK',
+                        description: '服务端合并发送FIN和ACK，减少挥手次数'
                     });
                 }
                 if (currentStep >= 3) {
                     showSteps.push({
+                        ...baseSteps[3],
                         step: 3,
+                        description: '客户端回应ACK确认服务端的FIN'
+                    });
+                }
+                if (currentStep >= 4) {
+                    showSteps.push({
+                        step: 4,
                         packet: '-',
                         direction: '-',
                         seq: '-',
                         ack: '-',
-                        clientState: 'ESTABLISHED',
-                        serverState: 'ESTABLISHED',
-                        description: '异常：只有两次握手，服务端无法确认客户端已收到SYN-ACK'
+                        clientState: 'TIME_WAIT',
+                        serverState: 'CLOSED',
+                        description: '连接关闭完成（三次挥手）'
                     });
-                    warningMessage.textContent = '警告：两次握手导致服务端无法确认客户端是否收到SYN-ACK，可能出现连接状态不一致';
+                    warningMessage.textContent = '注意：三次挥手可能在某些实现中出现，但需要确保所有数据都已传输完成';
                 }
             } 
-            // SYN-ACK丢失场景
-            else if (scenario === 'lostSynAck') {
+            // FIN-ACK丢失场景
+            else if (scenario === 'lostFinAck') {
                 if (currentStep >= 1) {
                     showSteps.push(baseSteps[0]);
                 }
                 if (currentStep >= 2) {
                     showSteps.push({
                         ...baseSteps[1],
-                        packet: 'SYN-ACK (丢失)',
-                        description: '异常：SYN-ACK包丢失，客户端将超时重传SYN'
+                        packet: 'ACK (丢失)',
+                        description: '异常：服务端的ACK包丢失，客户端将超时重传FIN'
                     });
                 }
                 if (currentStep >= 3) {
                     showSteps.push({
                         step: 3,
-                        packet: 'SYN (重传)',
+                        packet: 'FIN (重传)',
                         direction: '客户端 → 服务端',
-                        seq: simulationState.clientISN,
+                        seq: simulationState.clientLastSeq + 1,
                         ack: 0,
-                        clientState: 'SYN_SENT',
-                        serverState: 'LISTEN',
-                        description: '客户端超时未收到SYN-ACK，重传SYN包'
+                        clientState: 'FIN_WAIT_1',
+                        serverState: 'ESTABLISHED',
+                        description: '客户端超时未收到ACK，重传FIN包'
                     });
-                    errorMessage.textContent = '错误：SYN-ACK包丢失，连接无法正常建立，客户端将重试';
+                    errorMessage.textContent = '错误：ACK包丢失，连接关闭过程受阻，客户端将重试';
                 }
             } 
-            // ACK丢失场景
-            else if (scenario === 'lostAck') {
+            // 最后ACK丢失场景
+            else if (scenario === 'lostLastAck') {
                 if (currentStep >= 1) {
                     showSteps.push(baseSteps[0]);
                 }
@@ -793,24 +808,49 @@
                     showSteps.push(baseSteps[1]);
                 }
                 if (currentStep >= 3) {
-                    showSteps.push({
-                        ...baseSteps[2],
-                        packet: 'ACK (丢失)',
-                        description: '异常：ACK包丢失，服务端将超时重传SYN-ACK'
-                    });
+                    showSteps.push(baseSteps[2]);
                 }
                 if (currentStep >= 4) {
                     showSteps.push({
-                        step: 4,
-                        packet: 'SYN-ACK (重传)',
-                        direction: '服务端 → 客户端',
-                        seq: simulationState.serverISN,
-                        ack: simulationState.clientISN + 1,
-                        clientState: 'ESTABLISHED',
-                        serverState: 'SYN_RECEIVED',
-                        description: '服务端超时未收到ACK，重传SYN-ACK包'
+                        ...baseSteps[3],
+                        packet: 'ACK (丢失)',
+                        description: '异常：最后的ACK包丢失，服务端将超时重传FIN'
                     });
-                    warningMessage.textContent = '警告：ACK包丢失，客户端认为连接已建立，但服务端将超时关闭连接';
+                }
+                if (currentStep >= 5) {
+                    showSteps.push({
+                        step: 5,
+                        packet: 'FIN (重传)',
+                        direction: '服务端 → 客户端',
+                        seq: simulationState.serverLastSeq + 1,
+                        ack: simulationState.clientLastSeq + 2,
+                        clientState: 'TIME_WAIT',
+                        serverState: 'LAST_ACK',
+                        description: '服务端超时未收到ACK，重传FIN包'
+                    });
+                    warningMessage.textContent = '警告：最后ACK丢失，客户端已进入TIME_WAIT，但服务端将超时关闭连接';
+                }
+            }
+            // TIME_WAIT状态演示
+            else if (scenario === 'timeWait') {
+                if (currentStep >= 1) {
+                    showSteps.push(baseSteps[0]);
+                }
+                if (currentStep >= 2) {
+                    showSteps.push(baseSteps[1]);
+                }
+                if (currentStep >= 3) {
+                    showSteps.push(baseSteps[2]);
+                }
+                if (currentStep >= 4) {
+                    showSteps.push(baseSteps[3]);
+                }
+                if (currentStep >= 5) {
+                    showSteps.push({
+                        ...baseSteps[4],
+                        description: '客户端保持TIME_WAIT状态2MSL时间（通常1-4分钟）'
+                    });
+                    warningMessage.textContent = '注意：TIME_WAIT状态确保网络中所有残留包都消失，防止新连接收到旧包';
                 }
             }
 
@@ -820,9 +860,9 @@
                 
                 // 标记异常步骤
                 if (
-                    (scenario === 'lostSynAck' && step.packet === 'SYN-ACK (丢失)') ||
-                    (scenario === 'lostAck' && step.packet === 'ACK (丢失)') ||
-                    (scenario === 'twoWay' && step.description.includes('异常'))
+                    (scenario === 'lostFinAck' && step.packet === 'ACK (丢失)') ||
+                    (scenario === 'lostLastAck' && step.packet === 'ACK (丢失)') ||
+                    (scenario === 'threeWay' && step.description.includes('三次挥手'))
                 ) {
                     row.classList.add('error');
                 }
@@ -847,91 +887,105 @@
 
         // 执行单步模拟
         function simulateStep() {
-            if (simulationState.step >= 4) return;
+            if (simulationState.step >= 5) return;
             
             simulationState.step++;
             
             // 获取当前参数
-            simulationState.clientISN = parseInt(clientISNSlider.value);
-            simulationState.serverISN = parseInt(serverISNSlider.value);
+            simulationState.clientLastSeq = parseInt(clientLastSeqSlider.value);
+            simulationState.serverLastSeq = parseInt(serverLastSeqSlider.value);
             simulationState.abnormalScenario = abnormalScenarioSelect.value;
             
             // 根据步骤更新状态
             switch(simulationState.step) {
-                case 1: // 第一步：客户端发送SYN
-                    simulationState.clientState = 'SYN_SENT';
-                    simulationState.serverState = 'LISTEN';
-                    simulationState.clientSeqNum = simulationState.clientISN;
+                case 1: // 第一步：客户端发送FIN
+                    simulationState.clientState = 'FIN_WAIT_1';
+                    simulationState.clientSeqNum = simulationState.clientLastSeq + 1;
                     
                     simulationState.packets = [{
-                        type: 'syn',
-                        label: 'SYN',
-                        seq: simulationState.clientISN,
+                        type: 'fin',
+                        label: 'FIN',
+                        seq: simulationState.clientLastSeq + 1,
                         ack: 0,
                         direction: 'client-to-server',
-                        flags: 'SYN=1',
+                        flags: 'FIN=1',
                         isLost: false
                     }];
                     break;
                     
-                case 2: // 第二步：服务端发送SYN-ACK
-                    simulationState.serverState = 'SYN_RECEIVED';
-                    simulationState.serverSeqNum = simulationState.serverISN;
-                    simulationState.serverAckNum = simulationState.clientISN + 1;
+                case 2: // 第二步：服务端回应ACK
+                    simulationState.serverState = 'CLOSE_WAIT';
+                    simulationState.serverAckNum = simulationState.clientLastSeq + 2;
                     
-                    // 检查是否是SYN-ACK丢失场景
-                    const isSynAckLost = simulationState.abnormalScenario === 'lostSynAck';
+                    // 检查是否是三次挥手场景
+                    const isThreeWay = simulationState.abnormalScenario === 'threeWay';
+                    const isFinAckLost = simulationState.abnormalScenario === 'lostFinAck';
                     
                     simulationState.packets.push({
-                        type: 'syn-ack',
-                        label: isSynAckLost ? 'SYN-ACK (丢失)' : 'SYN-ACK',
-                        seq: simulationState.serverISN,
-                        ack: simulationState.clientISN + 1,
+                        type: isThreeWay ? 'fin-ack' : 'ack',
+                        label: isFinAckLost ? 'ACK (丢失)' : (isThreeWay ? 'FIN-ACK' : 'ACK'),
+                        seq: simulationState.serverLastSeq,
+                        ack: simulationState.clientLastSeq + 2,
                         direction: 'server-to-client',
-                        flags: 'SYN=1, ACK=1',
-                        isLost: isSynAckLost
+                        flags: isThreeWay ? 'FIN=1, ACK=1' : 'ACK=1',
+                        isLost: isFinAckLost
                     });
+                    
+                    // 客户端状态变化（收到ACK后）
+                    if (!isFinAckLost) {
+                        simulationState.clientState = 'FIN_WAIT_2';
+                    }
                     break;
                     
-                case 3: // 第三步：客户端发送ACK
-                    simulationState.clientState = 'ESTABLISHED';
-                    simulationState.clientAckNum = simulationState.serverISN + 1;
+                case 3: // 第三步：服务端发送FIN（如果不是三次挥手）
+                    if (simulationState.abnormalScenario !== 'threeWay') {
+                        simulationState.serverState = 'LAST_ACK';
+                        simulationState.serverSeqNum = simulationState.serverLastSeq + 1;
+                        
+                        simulationState.packets.push({
+                            type: 'fin',
+                            label: 'FIN',
+                            seq: simulationState.serverLastSeq + 1,
+                            ack: simulationState.clientLastSeq + 2,
+                            direction: 'server-to-client',
+                            flags: 'FIN=1',
+                            isLost: false
+                        });
+                    }
+                    break;
                     
-                    // 检查是否是ACK丢失场景
-                    const isAckLost = simulationState.abnormalScenario === 'lostAck';
+                case 4: // 第四步：客户端发送ACK
+                    simulationState.clientState = 'TIME_WAIT';
+                    simulationState.clientAckNum = simulationState.serverLastSeq + 2;
+                    
+                    // 检查是否是最后ACK丢失场景
+                    const isLastAckLost = simulationState.abnormalScenario === 'lostLastAck';
                     
                     simulationState.packets.push({
                         type: 'ack',
-                        label: isAckLost ? 'ACK (丢失)' : 'ACK',
-                        seq: simulationState.clientISN + 1,
-                        ack: simulationState.serverISN + 1,
+                        label: isLastAckLost ? 'ACK (丢失)' : 'ACK',
+                        seq: simulationState.clientLastSeq + 2,
+                        ack: simulationState.serverLastSeq + 2,
                         direction: 'client-to-server',
                         flags: 'ACK=1',
-                        isLost: isAckLost
+                        isLost: isLastAckLost
                     });
-                    break;
                     
-                case 4: // 第四步：连接建立完成
-                    if (simulationState.abnormalScenario === 'twoWay') {
-                        // 两次握手场景，服务端也认为连接建立
-                        simulationState.serverState = 'ESTABLISHED';
-                    } 
-                    else if (simulationState.abnormalScenario === 'lostAck') {
-                        // ACK丢失场景，服务端会超时关闭连接
+                    // 服务端状态变化（收到ACK后）
+                    if (!isLastAckLost) {
                         simulationState.serverState = 'CLOSED';
                     }
-                    else {
-                        // 正常情况，服务端收到ACK后建立连接
-                        simulationState.serverState = 'ESTABLISHED';
+                    break;
+                    
+                case 5: // 第五步：连接完全关闭
+                    if (simulationState.abnormalScenario === 'timeWait') {
+                        // 保持TIME_WAIT状态
+                        warningMessage.textContent = '客户端处于TIME_WAIT状态（2MSL时间），确保网络中所有残留包消失';
+                    } else {
+                        simulationState.clientState = 'CLOSED';
+                        simulationState.serverState = 'CLOSED';
                     }
                     break;
-            }
-            
-            // 处理两次握手异常场景
-            if (simulationState.abnormalScenario === 'twoWay' && simulationState.step === 3) {
-                simulationState.step = 4; // 跳过第三步
-                simulationState.clientState = 'ESTABLISHED';
-                simulationState.serverState = 'ESTABLISHED';
             }
             
             drawHandshake();
@@ -944,7 +998,7 @@
             simulationState.simulationInterval = setInterval(() => {
                 simulateStep();
                 
-                if (simulationState.step >= 4) {
+                if (simulationState.step >= 5) {
                     stopSimulation();
                 }
             }, 1500);
@@ -964,10 +1018,10 @@
             
             simulationState = {
                 step: 0,
-                clientState: 'CLOSED',
-                serverState: 'CLOSED',
-                clientISN: parseInt(clientISNSlider.value),
-                serverISN: parseInt(serverISNSlider.value),
+                clientState: 'ESTABLISHED',
+                serverState: 'ESTABLISHED',
+                clientLastSeq: parseInt(clientLastSeqSlider.value),
+                serverLastSeq: parseInt(serverLastSeqSlider.value),
                 clientSeqNum: 0,
                 serverSeqNum: 0,
                 clientAckNum: 0,
